@@ -3,7 +3,12 @@ from collections import deque
 from dataclasses import dataclass
 from enum import Enum
 from typing import TextIO
-from data import Int64
+_MASK64 = (1 << 64) - 1
+
+def _to_i64(x):
+    """Truncate arbitrary-precision Python int to 64-bit signed."""
+    x = x & _MASK64
+    return x - (1 << 64) if x >> 63 else x
 
 """
           CS314 Project 1. Python Starter written by Winston Li
@@ -113,16 +118,15 @@ class Optimizer:
     # -- Constant folding --------------------------------------------------
 
     def _eval(self, op, a, b):
-        a64, b64 = Int64(a), Int64(b)
         match op:
-            case '+': return int(a64 + b64)
-            case '-': return int(a64 - b64)
-            case '*': return int(a64 * b64)
-            case '&': return int(a64 & b64)
-            case '|': return int(a64 | b64)
-            case '^': return int(a64 ^ b64)
-            case '<': return int(a64 << b64)
-            case '>': return int(a64 >> b64)
+            case '+': return _to_i64(a + b)
+            case '-': return _to_i64(a - b)
+            case '*': return _to_i64(a * b)
+            case '&': return _to_i64(a & b)
+            case '|': return _to_i64(a | b)
+            case '^': return _to_i64(a ^ b)
+            case '<': return _to_i64(a << (b & 63))
+            case '>': return _to_i64(a >> (b & 63))
 
     def _fold_expr(self, node):
         """Returns (new_node, changed_bool)."""
@@ -131,7 +135,7 @@ class Optimizer:
         if isinstance(node, UnaryOpNode):
             new_op, c = self._fold_expr(node.operand)
             if isinstance(new_op, NumberNode):
-                return NumberNode(int(~Int64(new_op.value))), True
+                return NumberNode(_to_i64(~new_op.value)), True
             return UnaryOpNode(node.op, new_op), c
         if isinstance(node, BinOpNode):
             new_left, cl = self._fold_expr(node.left)
